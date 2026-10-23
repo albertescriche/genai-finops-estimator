@@ -1,0 +1,953 @@
+<title>GenAI FinOps Estimator — offline</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --surface-2:#fbfcfd; --line:#dce1e8; --line-soft:#edf0f4;
+    --ink:#161c24; --ink-2:#48535f; --ink-3:#78828e;
+    --s1:#0b6e7f; --s2:#d98324; --s3:#4a5c6a; --s4:#9e2a2b;
+    --s1-soft:#e4f0f2; --s2-soft:#fbeadd; --s3-soft:#e9edef; --s4-soft:#f6e6e6;
+    --good:#2f7d5d; --blue:#2563a8; --shadow:0 1px 2px rgba(16,24,34,.06),0 4px 14px rgba(16,24,34,.05);
+    --font-ui:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+    --font-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --bg:#10141a; --surface:#181e26; --surface-2:#1d242d; --line:#2b343f; --line-soft:#222a34;
+    --ink:#eaeef3; --ink-2:#aeb9c6; --ink-3:#7f8b99;
+    --s1:#4fa3b4; --s2:#d0742c; --s3:#8fa2b0; --s4:#c75e5f;
+    --s1-soft:#15282c; --s2-soft:#32221a; --s3-soft:#20262b; --s4-soft:#2e1d1d;
+    --good:#5fb28a; --blue:#6aa3dd; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#10141a; --surface:#181e26; --surface-2:#1d242d; --line:#2b343f; --line-soft:#222a34;
+    --ink:#eaeef3; --ink-2:#aeb9c6; --ink-3:#7f8b99;
+    --s1:#4fa3b4; --s2:#d0742c; --s3:#8fa2b0; --s4:#c75e5f;
+    --s1-soft:#15282c; --s2-soft:#32221a; --s3-soft:#20262b; --s4-soft:#2e1d1d;
+    --good:#5fb28a; --blue:#6aa3dd; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);line-height:1.55;margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:26px 80px}
+  h1{font-size:clamp(1.5rem,1.05rem + 1.9vw,2.2rem);line-height:1.1;margin:0 0 6px;letter-spacing:-.025em;text-wrap:balance}
+  h2{font-size:1.14rem;margin:0 0 3px;letter-spacing:-.015em}
+  h3{font-size:.92rem;margin:0 0 7px}
+  p{margin:0 0 10px;color:var(--ink-2)}
+  .lede{max-width:72ch;margin-bottom:22px;font-size:.95rem}
+  .eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-3);font-weight:600;margin-bottom:3px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:var(--shadow)}
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .cols>*{min-width:0}
+  label.lbl{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.11em;color:var(--ink-3);font-weight:600;margin-bottom:5px}
+  select,textarea{font-family:var(--font-ui);color:var(--ink);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.9rem}
+  select{min-width:230px;cursor:pointer}
+  textarea{width:100%;min-height:118px;line-height:1.55;resize:vertical;margin-top:12px}
+  textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+  .bar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+  button{font-family:var(--font-ui);font-size:.9rem;font-weight:600;border-radius:8px;cursor:pointer;
+    padding:10px 20px;border:1px solid transparent;background:var(--s1);color:#fff;transition:filter .15s}
+  button:hover:not(:disabled){filter:brightness(1.08)}
+  button:disabled{opacity:.45;cursor:default}
+  button.ghost{background:transparent;color:var(--ink-2);border-color:var(--line)}
+  .status{font-size:.85rem;color:var(--ink-3);flex:1 1 180px;min-height:1.3em;padding-bottom:10px}
+  .status.err{color:var(--s4)}
+  .status.busy::after{content:"";display:inline-block;width:7px;height:7px;margin-left:7px;border-radius:50%;
+    background:var(--s1);animation:pulse 1.1s ease-in-out infinite;vertical-align:middle}
+  @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  th{font-size:.67rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600}
+  td.n,th.n{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+  .tscroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:.73rem;font-weight:600;padding:3px 10px;
+    border-radius:999px;background:var(--s1-soft);color:var(--s1)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:1px;background:var(--line-soft);
+    border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;margin-top:14px}
+  .tile{background:var(--surface);padding:12px 14px}
+  .tile .v{font-family:var(--font-num);font-size:1.22rem;font-weight:600;letter-spacing:-.02em;display:block}
+  .tile .k{font-size:.7rem;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em;margin-top:2px;display:block}
+  .big{font-family:var(--font-num);font-size:1.62rem;font-weight:600;letter-spacing:-.025em;line-height:1.1}
+  ul{margin:0;padding-left:17px;color:var(--ink-2);font-size:.875rem}
+  li{margin-bottom:6px}
+  ul.clean{list-style:none;padding:0}
+  ul.clean li{display:flex;gap:9px;align-items:baseline}
+  ul.clean .d{flex:0 0 6px;height:6px;border-radius:50%;background:var(--s2);margin-top:6px}
+  .note{font-size:.76rem;color:var(--ink-3);margin-top:10px;line-height:1.5}
+  .best{border-color:var(--s1)}
+  .best::before{content:"Lowest three-year cost";position:absolute;top:-9px;left:18px;font-size:.65rem;
+    font-weight:700;letter-spacing:.09em;text-transform:uppercase;background:var(--s1);color:#fff;padding:2px 9px;border-radius:999px}
+  .sep{height:1px;background:var(--line-soft);margin:14px 0}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.76rem;color:var(--ink-2);margin-top:10px}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  svg{display:block;width:100%;height:auto}
+  .track{height:26px;border-radius:5px;background:var(--line-soft);overflow:hidden;display:flex}
+  .fill{display:flex;height:100%;min-width:2px}
+  .seg{height:100%;transition:filter .15s}
+  .seg:hover{filter:brightness(1.12)}
+  .srow{margin-bottom:16px}
+  .srow:last-child{margin-bottom:0}
+  .srow .top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:5px;flex-wrap:wrap}
+  .srow .nm{font-size:.92rem;font-weight:600}
+  .srow .tt{font-family:var(--font-num);font-size:.95rem;font-weight:600}
+  .srow .sub{font-size:.75rem;color:var(--ink-3);margin-top:5px}
+  .rel{position:relative}
+  @media (prefers-reduced-motion:no-preference){.fade{animation:f .3s ease-out both}}
+  @keyframes f{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+<!-- no webfont: this copy makes no network request of any kind -->
+
+<div class="wrap">
+  <div class="eyebrow">GenAI FinOps · CAS ETH Innovation Project · offline copy</div>
+  <h1>Total Cost of Ownership Estimator</h1>
+  <p class="lede">Describe a GenAI product. The tool states the assumptions it had to make, sets the LLM tier,
+  forecasts three years of adoption, and prices the same application on all four infrastructure models — the
+  vendor bill and the people needed to run it, in Swiss francs. It then blends the four into one path through the
+  adoption phases, and asks how many applications it would take before owning the hardware pays.</p>
+
+  <div class="stack">
+    <div class="card">
+      <div class="bar">
+        <div>
+          <label class="lbl" for="preset">Use case</label>
+          <select id="preset">
+            <option value="simple">Simple — policy-wording assistant</option>
+            <option value="medium" selected>Medium — underwriting assistant</option>
+            <option value="complex">Complex — claims-handling platform</option>
+            <option value="new">New use case — write your own</option>
+          </select>
+        </div>
+        <button id="go">Estimate</button>
+        <button id="stop" class="ghost" hidden>Stop</button>
+        <span class="status" id="status"></span>
+      </div>
+      <textarea id="desc" aria-label="Product description" placeholder="Describe the application: what it does, who uses it, how often, and how sensitive the data is."></textarea>
+    </div>
+    <div id="out" class="stack"></div>
+  </div>
+
+  <p class="note" style="margin-top:30px;max-width:80ch">Prices, salaries, adoption coefficients, GPU throughput and
+  hardware costs are fixed tables from the paper's annexes, in Swiss francs. All arithmetic runs in this page, in
+  JavaScript, and every figure it prints is reproduced by the accompanying notebook.
+  <strong>This is the offline copy submitted with the report:</strong> it opens from disk with no account, no key and no
+  network. The three use cases from the report carry their parameters and their commentary with them. Describing an
+  application of your own is the one thing that needs a Claude session, because that is the only step a language model
+  performs — reading a free-text description to set the parameters. It never does the arithmetic.</p>
+</div>
+
+<script>
+// ───────────── presets (the paper's three use cases) ─────────────
+const PRESETS={
+ simple:`An assistant that answers staff questions about our own policy wordings and product terms: what a product covers, which exclusions apply, how a term is defined. It is grounded on a stable set of documents held in SharePoint and is open to every employee in the company, around five thousand people. Each question is short and answered from the documents. No client data is involved.`,
+ medium:`An assistant for our underwriting department. It answers questions from product guidelines, risk appetite documents, past cases and regulatory notes, and summarises long submissions. It serves the underwriting team of roughly three hundred people, who work with it steadily through the day. The documents are commercially confidential. The business wants control over which model is used and how its answers are evaluated.`,
+ complex:`A platform that assists claims specialists with complex files. It reads claim forms, photographs of damage and medical reports, extracts the facts, checks them against the policy and drafts an assessment for the specialist to review. The team is small, about forty people, and each file takes substantial multi-step reasoning over images and long documents. The files contain client-identifying health data.`,
+ new:""};
+// The three presets are the report's own use cases, so their parameters are fixed rather than
+// re-derived: the figures then reproduce the report exactly. A description you write yourself
+// is read by Claude instead.
+const PRESET_FIX={
+ simple:{tier:1,users:5000,tasksPerDay:3,tokensIn:1500,tokensOut:300,sensitivity:"none",seats:0,
+   seatNote:"no new Copilot seats — the subscription is already in place and licensed staff run internal agents free of credits (Chapter 5.2)",
+   src:"Chapter 5.2 — all employees, three short grounded questions a working day"},
+ medium:{tier:2,users:300,tasksPerDay:20,tokensIn:5000,tokensOut:1000,sensitivity:"confidential",seats:300,
+   seatNote:"a Copilot seat charged to this application for every one of the 300 underwriters",
+   src:"Chapter 5.3 and Annex F.3 — 300 underwriters, 20 long-context tasks a working day"},
+ complex:{tier:3,users:40,tasksPerDay:4,tokensIn:20000,tokensOut:2000,sensitivity:"client-identifying",seats:0,
+   seatNote:"no new Copilot seats; client-identifying health data rules this option out whatever it costs",
+   src:"Chapter 5.4 — 40 claims specialists, multi-step reasoning over images and long documents"}};
+
+// The three report use cases carry their commentary with them, so this copy needs no
+// Claude session to run them: the parameters are pinned and the reasoning is the report's.
+const PRESET_PROSE={
+ "simple": {
+  "tier": 1,
+  "tierRationale": "The questions are answered from a fixed set of policy wordings and product terms: what a product covers, which exclusions apply, how a term is defined. Short grounded answers, no multi-step reasoning. A small model is enough — the work sits in the grounding, not in the model.",
+  "candidates": [
+   {
+    "model": "Apertus 8B",
+    "why": "open weights, Swiss-hosted, enough for grounded answers"
+   },
+   {
+    "model": "gpt-5.4-mini",
+    "why": "cheapest managed tier, no infrastructure at all"
+   },
+   {
+    "model": "Llama 3.1 8B",
+    "why": "common open baseline for retrieval-grounded question answering"
+   }
+  ],
+  "curveRationale": "Open to every employee and useful from the first day, but it competes with simply asking a colleague, so take-up follows the standard internal curve rather than a mandated rollout. p=0.03 and q=0.38 per quarter, as in Annex F.1.",
+  "assumptions": [
+   {
+    "field": "Tasks per user per day",
+    "value": "3 short questions",
+    "why": "the description says staff ask occasional questions, not that they work in the tool"
+   },
+   {
+    "field": "Tokens per task",
+    "value": "1,500 in / 300 out",
+    "why": "a retrieved passage plus a short grounded answer"
+   },
+   {
+    "field": "Copilot seats charged",
+    "value": "none",
+    "why": "the subscription is already in place and licensed staff run internal agents without consuming credits (Chapter 5.2)"
+   },
+   {
+    "field": "Intended population",
+    "value": "5,000 employees",
+    "why": "the description says the tool is open to everyone in the company"
+   }
+  ],
+  "decision": {
+   "recommendation": "AI as a Service, at CHF 462,418. The GenAI Gateway is cheaper on paper, CHF 409,374, but the difference is about half a rappen per task and it buys a skill set the organisation does not have: the Copilot seats are already licensed and the team already publishes Power Apps, so the only new skill here is prompt engineering at 30% of one person. Hyperscaled and Owned AI are an order of magnitude more expensive for a workload this light.",
+   "notes": [
+    {
+     "kind": "aiaas",
+     "note": "Almost all of it is people and credits; the seats themselves are already paid, so this is the continuity option."
+    },
+    {
+     "kind": "gateway",
+     "note": "Cheapest on the token bill, but it adds an AI engineer and an application developer for a workload that needs neither."
+    },
+    {
+     "kind": "hyper",
+     "note": "A GPU billed every hour it runs, for traffic that would not fill a fraction of it."
+    },
+    {
+     "kind": "owned",
+     "note": "Owning hardware for short grounded answers: the saving per server never reaches the staff it requires."
+    }
+   ]
+  }
+ },
+ "medium": {
+  "tier": 2,
+  "tierRationale": "Long submissions summarised against product guidelines, risk appetite documents, past cases and regulatory notes. That is long-context reasoning over internal documents, and a 70-billion-parameter class model is the smallest that holds the thread across a full submission.",
+  "candidates": [
+   {
+    "model": "Llama 3.3 70B",
+    "why": "open weights, strong long-context summarisation"
+   },
+   {
+    "model": "Apertus 70B",
+    "why": "Swiss open-weight model of the same class"
+   },
+   {
+    "model": "gpt-5.4",
+    "why": "managed equivalent, no deployment to run"
+   }
+  ],
+  "curveRationale": "A single department of 300 with a clear owner and a visible benefit, so word of mouth dominates and the curve is the standard one: p=0.03 and q=0.38 per quarter, reaching 84% of the department at month 31.",
+  "assumptions": [
+   {
+    "field": "Tasks per user per day",
+    "value": "20",
+    "why": "the description says the team works with it steadily through the day"
+   },
+   {
+    "field": "Tokens per task",
+    "value": "5,000 in / 1,000 out",
+    "why": "a long submission plus supporting guidelines, answered in a paragraph (Annex F.3)"
+   },
+   {
+    "field": "Copilot seats charged",
+    "value": "300",
+    "why": "a seat charged to this application for every underwriter"
+   },
+   {
+    "field": "Model control",
+    "value": "required",
+    "why": "the business asks to choose the model and to evaluate its answers, which a gateway allows and a closed service does not"
+   }
+  ],
+  "decision": {
+   "recommendation": "GenAI Gateway, at CHF 453,570, for the whole life of the application. The token bill is only CHF 48,504 of it — 11% — and the people are 89%. A move to Hyperscaled AI never pays: the GPU stack needs about CHF 24,200 a month more in staff, which is two thirds of the switching threshold on its own, so the GPU price alone understates it by a factor of three. Owned AI costs CHF 1,169,170 for the same work.",
+   "notes": [
+    {
+     "kind": "aiaas",
+     "note": "Workable, but 300 Copilot seats cost more than the entire token bill and the model cannot be chosen or evaluated."
+    },
+    {
+     "kind": "gateway",
+     "note": "The token bill is 11% of the three-year cost; the volatility everyone budgets for moves the smaller number."
+    },
+    {
+     "kind": "hyper",
+     "note": "Three full-time equivalents across four roles, and a GPU billed whether busy or idle at about 8% utilisation."
+    },
+    {
+     "kind": "owned",
+     "note": "Cheaper hardware than Azure, but the staff it needs cost more than every token this application will ever send."
+    }
+   ]
+  }
+ },
+ "complex": {
+  "tier": 3,
+  "tierRationale": "Claim forms, photographs of damage and medical reports, read together, checked against the policy and drafted into an assessment. Multi-step reasoning over images and long documents puts this at the frontier tier, with a vision model at ingestion, and the weights need 640 GB of GPU memory.",
+  "candidates": [
+   {
+    "model": "DeepSeek-V3 family",
+    "why": "open weights at frontier quality, deployable on owned hardware"
+   },
+   {
+    "model": "gpt-5.4-pro",
+    "why": "managed frontier reasoning, ruled out by the data"
+   }
+  ],
+  "curveRationale": "Forty specialists, each file substantial. Adoption is limited by trust in the drafts rather than by awareness, so the curve is slower in absolute numbers but the same shape.",
+  "assumptions": [
+   {
+    "field": "Files per specialist per day",
+    "value": "4",
+    "why": "complex files take substantial review, so the throughput is low"
+   },
+   {
+    "field": "Tokens per task",
+    "value": "20,000 in / 2,000 out",
+    "why": "a claim file with images and medical reports, drafted into an assessment"
+   },
+   {
+    "field": "Copilot seats charged",
+    "value": "none",
+    "why": "client-identifying health data rules this option out whatever it costs"
+   },
+   {
+    "field": "Data sensitivity",
+    "value": "client-identifying",
+    "why": "medical reports are health data under Chapter 2.3, which removes the two shared options"
+   }
+  ],
+  "decision": {
+   "recommendation": "Owned AI, at CHF 1,380,598. The data decides it before the cost does: client-identifying health data rules out AI as a Service and the GenAI Gateway whatever they charge, which leaves Hyperscaled AI at CHF 4,084,299 and Owned AI. Owning is about CHF 2.7 million cheaper, almost entirely because the infrastructure is CHF 419,326 against CHF 3,074,544 of Azure GPU billed busy or idle. For forty users, check whether a frontier workload really needs this scale before committing.",
+   "notes": [
+    {
+     "kind": "aiaas",
+     "note": "The cheapest option by far, and irrelevant: client-identifying health data rules it out."
+    },
+    {
+     "kind": "gateway",
+     "note": "Also excluded by the data rules, however attractive the per-token price looks."
+    },
+    {
+     "kind": "hyper",
+     "note": "An eight-GPU node billed every hour it runs, at list price, for forty users — the most expensive way to meet the requirement."
+    },
+    {
+     "kind": "owned",
+     "note": "The cheapest option that fits the data rules, but 70% of it is staff, so the team has to be hired and kept."
+    }
+   ]
+  }
+ }
+};
+
+// ───────────── static tables (paper annexes, CHF unless noted) ─────────────
+const FX=0.8321, UPLIFT=1.40, KWH=0.20, HOURS=730, COLO=1250;   // Annex D/G + sourced hardware
+const TIERS={
+ 1:{name:"Tier 1 — Small",params:"~8B parameters",gpuVm:"NC24ads A100 v4 · 1× A100 80 GB",vmTokS:2500,
+    azureMonth:3190,managed:{name:"gpt-5.4-mini",in:0.21,out:1.66},open:"Apertus 8B",
+    hw:{gpus:1,card:10000,chassis:25000,kw:0.6,desc:"PowerEdge R760xa · 1× L40S"}},
+ 2:{name:"Tier 2 — Medium",params:"~70B parameters",gpuVm:"NC80adis H100 v5 · 2× H100 NVL",vmTokS:2400,
+    azureMonth:12126,managed:{name:"gpt-5.4",in:2.08,out:12.48},open:"Llama 3.3 70B · Apertus 70B",
+    hw:{gpus:2,card:29000,chassis:30000,kw:1.6,desc:"PowerEdge R760xa · 2× H100 NVL"}},
+ 3:{name:"Tier 3 — Frontier",params:"37B active / 671B total",gpuVm:"ND96isr H100 v5 · 8× H100",vmTokS:5500,
+    azureMonth:85404,managed:{name:"gpt-5.4-pro",in:12.48,out:49.93},open:"DeepSeek-V3 family",
+    hw:{gpus:8,card:29000,chassis:60000,kw:6.5,desc:"PowerEdge XE9680 · 8× H100 SXM"}}};
+const ownedMonth=t=>{const h=TIERS[t].hw;
+  return (h.gpus*h.card+h.chassis)*FX*UPLIFT/36 + h.kw*HOURS*KWH + COLO;};
+
+const SEAT=25;                      // Annex B.1, M365 Copilot, USD 30 at 0.8321
+const CREDIT_PACK=166, CREDITS_PER_PACK=25000, CREDITS_PER_ANSWER=10;  // Annex B, Table B1 — grounded agent
+const WORK_DAYS=22, WORK_SECONDS=28800, PEAK=3, MONTHS=36;
+const SALARY={prompt:9111,ai:12698,appdev:12419,mlops:11174,cloud:13866,sre:12419};
+const ROLE={prompt:"Prompt engineer",ai:"AI engineer",appdev:"Application developer",
+ mlops:"MLOps engineer",cloud:"Cloud engineer",sre:"Site reliability engineer"};
+// Owned AI carries no infrastructure engineer: Dell maintains the hardware under APEX and
+// Swisscom provides the data-centre layer with the colocation.
+const FTE={aiaas:{prompt:[.3,.3,.3]},gateway:{ai:[.2,.4,.5],appdev:[.3,.5,.5]},
+ hyper:{mlops:[.5,.7,1],cloud:[.3,.5,.5],sre:[.3,.5,1],appdev:[.3,.5,.5]},
+ owned:{mlops:[.5,.7,1],sre:[.5,1,1.5],appdev:[.3,.5,.5]}};
+const SETUP={aiaas:9111,gateway:37535,hyper:73470,owned:59605};
+const INFRA={aiaas:"AI as a Service",gateway:"GenAI Gateway",hyper:"Hyperscaled AI",owned:"Owned AI"};
+const KINDS=["aiaas","gateway","hyper","owned"];
+const KCOL={aiaas:"var(--s1)",gateway:"var(--s2)",hyper:"var(--s3)",owned:"var(--s4)"};
+const KSOFT={aiaas:"var(--s1-soft)",gateway:"var(--s2-soft)",hyper:"var(--s3-soft)",owned:"var(--s4-soft)"};
+const BASS_P=.03,BASS_Q=.38,QUARTERS=12;
+const PHASE=["Early adoption","Mid adoption","Long-term use"];
+const CAT=[["service","Service — subscription or tokens","var(--s1)"],
+           ["infra","Infrastructure — cloud or on-premises","var(--s3)"],
+           ["workforce","Workforce — build and run","var(--s4)"],
+           ["setup","Setup","var(--ink-3)"]];
+
+// ───────────── maths ─────────────
+const bassF=(t,p,q)=>{const e=Math.exp(-(p+q)*t);return (1-e)/(1+(q/p)*e);};
+const solveT=(tg,p,q)=>{let lo=0,hi=200;for(let i=0;i<80;i++){const m=(lo+hi)/2;bassF(m,p,q)<tg?lo=m:hi=m;}return (lo+hi)/2;};
+const phaseOf=f=>f<.16?0:f<.84?1:2;
+
+function monthRows(inp,p,q){
+  const rows=[];
+  for(let m=0;m<MONTHS;m++){
+    const t=(m+.5)/3, f=bassF(t,p,q);
+    const adopters=Math.max(Math.round(inp.users*f),1);
+    const perTask=inp.tokensIn+inp.tokensOut;
+    const daily=adopters*inp.tasksPerDay*perTask;
+    rows.push({m,t,f,phase:phaseOf(f),adopters,daily,
+      answers:adopters*inp.tasksPerDay*WORK_DAYS,
+      monthlyIn:adopters*inp.tasksPerDay*inp.tokensIn*WORK_DAYS,
+      monthlyOut:adopters*inp.tasksPerDay*inp.tokensOut*WORK_DAYS,
+      monthly:daily*WORK_DAYS, peak:daily*PEAK/WORK_SECONDS});
+  }
+  return rows;
+}
+function costOf(kind,r,tier,inp){
+  const T=TIERS[tier]; let service=0,infra=0,vms=0;
+  if(kind==="aiaas"){
+    service=SEAT*inp.seats
+          + Math.ceil(r.answers*CREDITS_PER_ANSWER/CREDITS_PER_PACK)*CREDIT_PACK;
+  }else if(kind==="gateway"){
+    service=r.monthlyIn/1e6*T.managed.in + r.monthlyOut/1e6*T.managed.out;
+  }else{
+    vms=Math.max(1,Math.ceil(r.peak/T.vmTokS));
+    infra=vms*(kind==="hyper"?T.azureMonth:ownedMonth(tier));
+  }
+  const workforce=Object.entries(FTE[kind]).reduce((s,[k,f])=>s+f[r.phase]*SALARY[k],0);
+  return {service,infra,workforce,vms};
+}
+function runOption(kind,rows,tier,inp){
+  const months=rows.map((r,i)=>{
+    const c=costOf(kind,r,tier,inp);
+    const setup=i===0?SETUP[kind]:0;
+    return {...r,kind,...c,setup,total:c.service+c.infra+c.workforce+setup};
+  });
+  const sum=k=>months.reduce((s,x)=>s+x[k],0);
+  const byPhase=[0,1,2].map(i=>{
+    const mm=months.filter(x=>x.phase===i); if(!mm.length)return null;
+    const g=k=>mm.reduce((s,x)=>s+x[k],0), last=mm[mm.length-1];
+    return {idx:i,name:PHASE[i],months:mm.length,vms:last.vms,users:last.adopters,peak:last.peak,
+      service:g("service"),infra:g("infra"),workforce:g("workforce"),setup:g("setup"),total:g("total")};
+  }).filter(Boolean);
+  return {kind,name:INFRA[kind],months,byPhase,service:sum("service"),infra:sum("infra"),
+    workforce:sum("workforce"),setup:sum("setup"),total:sum("total")};
+}
+
+
+// ───────────── blended path across the three phases ─────────────
+// Client-identifying data rules out the two shared options whatever they cost
+// (Chapter 2.3), so the path may only choose between what is left.
+const ELIGIBLE=s=>s==="client-identifying"?["hyper","owned"]:KINDS.slice();
+// What Chapter 5 recommends, where cost is not the only consideration.
+const PAPER_PATH={
+ simple:{path:["aiaas","aiaas","aiaas"],
+   why:"Chapter 5.2 keeps the policy-wording assistant on AI as a Service for its whole life. The seats are already licensed and the team already publishes Power Apps, so a move to a gateway buys a small saving and a new skill set."},
+ medium:{path:["gateway","gateway","gateway"],
+   why:"Chapter 5.3 keeps the underwriting assistant on a GenAI Gateway for its whole life."},
+ complex:{path:["hyper","owned","owned"],
+   why:"Chapter 5.4 starts the claims platform on a short Hyperscaled pilot — not because it is cheaper, but because the use case is unproven and a pilot carries no commitment — then moves to Owned AI for the data rules."}};
+
+function combinedPath(opts,sens,preset){
+  const ok=ELIGIBLE(sens), byK=Object.fromEntries(opts.map(o=>[o.kind,o]));
+  const phases=[0,1,2].map(i=>{
+    const cand=ok.map(k=>{const b=byK[k].byPhase.find(x=>x.idx===i);
+      return b?{kind:k,months:b.months,users:b.users,vms:b.vms,service:b.service,
+                infra:b.infra,workforce:b.workforce,run:b.service+b.infra+b.workforce}:null;}).filter(Boolean);
+    if(!cand.length)return null;
+    return {idx:i,name:PHASE[i],cand,...cand.reduce((a,b)=>b.run<a.run?b:a)};
+  }).filter(Boolean);
+  const steps=[];let build=0,prev=null;
+  phases.forEach((p,i)=>{if(p.kind!==prev){steps.push({at:i,from:prev,to:p.kind,cost:SETUP[p.kind]});
+    build+=SETUP[p.kind];prev=p.kind;}});
+  const run=phases.reduce((s,p)=>s+p.run,0);
+  const single=ok.map(k=>byK[k]).reduce((a,b)=>b.total<a.total?b:a);
+  const paper=PAPER_PATH[preset]||null;
+  let paperCost=null;
+  if(paper){let c=0,pv=null;
+    phases.forEach((p,i)=>{const k=paper.path[i],b=byK[k].byPhase.find(x=>x.idx===i);
+      if(b)c+=b.service+b.infra+b.workforce; if(k!==pv){c+=SETUP[k];pv=k;}});
+    paperCost=c;}
+  return {phases,steps,build,run,total:run+build,single,saving:single.total-(run+build),paper,paperCost};
+}
+
+// ───────────── economy of scale: how many applications like this one ─────────
+// One server kept busy every hour of the month, in millions of tokens.
+const FLATM=t=>TIERS[t].vmTokS*HOURS*3600/1e6;
+// A server sized for the peak can only be loaded to 1/PEAK on average, and only during
+// working hours: millions of tokens one server can actually deliver that way per month.
+const SERVEDM=t=>TIERS[t].vmTokS/PEAK*WORK_SECONDS*WORK_DAYS/1e6;
+const SCALE_MAX=30;
+function scaleAt(rows,tier,N){
+  const T=TIERS[tier],om=ownedMonth(tier);
+  let gw=SETUP.gateway,pk=SETUP.owned,bz=SETUP.owned,vpk=0,vbz=0;
+  rows.forEach(r=>{
+    const wG=Object.entries(FTE.gateway).reduce((s,[k,f])=>s+f[r.phase]*SALARY[k],0);
+    const wO=Object.entries(FTE.owned).reduce((s,[k,f])=>s+f[r.phase]*SALARY[k],0);
+    const np=Math.max(1,Math.ceil(r.peak*N/T.vmTokS));
+    const nb=Math.max(1,Math.ceil((r.monthly*N/1e6)/FLATM(tier)));
+    gw+=r.monthlyIn*N/1e6*T.managed.in+r.monthlyOut*N/1e6*T.managed.out+wG;
+    pk+=np*om+wO; bz+=nb*om+wO; vpk=np; vbz=nb;});
+  return {gw,pk,bz,vpk,vbz};
+}
+function crossAt(rows,tier,key,max){
+  for(let N=1;N<=max;N++){const c=scaleAt(rows,tier,N);if(c[key]<c.gw)return N;}
+  return null;
+}
+
+// ───────────── format ─────────────
+const chf=n=>"CHF "+Math.round(n).toLocaleString("de-CH").replace(/’/g,"'");
+const chf2=n=>"CHF "+n.toFixed(2);
+const chfK=n=>n>=1e6?"CHF "+(n/1e6).toFixed(2)+"M":"CHF "+Math.round(n/1e3)+"k";
+const K=n=>n>=1e9?(n/1e9).toFixed(1)+"B":n>=1e6?(n/1e6).toFixed(0)+"M":n>=1e3?(n/1e3).toFixed(0)+"k":Math.round(n);
+const num=n=>Math.round(n).toLocaleString("de-CH").replace(/’/g,"'");
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ───────────── charts ─────────────
+function curveChart(rows,p,q,users){
+  const W=960,H=300,L=58,R=64,T=34,B=38,pw=W-L-R,ph=H-T-B;
+  const x=t=>L+t/QUARTERS*pw, y=f=>T+ph-f*ph;
+  let line="",area=`M${L} ${y(0)}`;
+  for(let i=0;i<=180;i++){const t=i/180*QUARTERS,f=bassF(t,p,q);
+    line+=(i?"L":"M")+x(t).toFixed(1)+" "+y(f).toFixed(1); area+="L"+x(t).toFixed(1)+" "+y(f).toFixed(1);}
+  area+=`L${x(QUARTERS)} ${y(0)}Z`;
+  const t16=Math.min(solveT(.16,p,q),QUARTERS), t84=Math.min(solveT(.84,p,q),QUARTERS);
+  const bnd=[0,t16,t84,QUARTERS];
+  const bands=[0,1,2].map(i=>i===1?"":`<rect x="${x(bnd[i])}" y="${T}" width="${x(bnd[i+1])-x(bnd[i])}" height="${ph}" fill="var(--s1)" opacity=".05"/>`).join("");
+  const divs=[t16,t84].map(t=>`<line x1="${x(t)}" y1="${T}" x2="${x(t)}" y2="${T+ph}" stroke="var(--s1)" stroke-width="1" stroke-dasharray="3 3" opacity=".55"/>`).join("");
+  const plab=[0,1,2].map(i=>{const cx=(x(bnd[i])+x(bnd[i+1]))/2;
+    return `<text x="${cx}" y="${T-13}" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ink-2)">${PHASE[i]}</text>
+      <text x="${cx}" y="${T-1}" text-anchor="middle" font-size="10" fill="var(--ink-3)">${Math.round((bnd[i+1]-bnd[i])*3)} months</text>`;}).join("");
+  const gy=[0,.25,.5,.75,1].map(f=>`<line x1="${L}" y1="${y(f)}" x2="${W-R}" y2="${y(f)}" stroke="var(--line-soft)"/>
+    <text x="${L-9}" y="${y(f)+3.5}" text-anchor="end" font-size="10.5" fill="var(--ink-3)">${f*100}%</text>
+    <text x="${W-R+9}" y="${y(f)+3.5}" font-size="10.5" font-family="var(--font-num)" fill="var(--ink-3)">${num(users*f)}</text>`).join("");
+  const gx=[0,3,6,9,12].map(t=>`<text x="${x(t)}" y="${H-12}" text-anchor="middle" font-size="10.5" fill="var(--ink-3)">month ${t*3}</text>`).join("");
+  const mk=[[t16,.16],[t84,.84]].map(([t,f])=>`<circle cx="${x(t)}" cy="${y(f)}" r="5" fill="var(--surface)" stroke="var(--s1)" stroke-width="2.4"/>
+    <text x="${x(t)+9}" y="${y(f)-8}" font-size="10.5" font-weight="600" fill="var(--s1)">${f*100}% · month ${Math.round(t*3)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of the user group that has adopted, over three years">
+    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--s1)" stop-opacity=".30"/><stop offset="100%" stop-color="var(--s1)" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${bands}${gy}${gx}<path d="${area}" fill="url(#ag)"/>${divs}
+    <path d="${line}" fill="none" stroke="var(--s1)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    ${mk}${plab}
+    <text x="${L}" y="${T-24}" font-size="10.5" fill="var(--ink-3)">share adopted</text>
+    <text x="${W-R+9}" y="${T-24}" font-size="10.5" fill="var(--ink-3)">users</text></svg>`;
+}
+
+function runRateChart(opts,p,q){
+  const W=960,H=290,L=70,R=16,T=26,B=38,pw=W-L-R,ph=H-T-B;
+  const peak=Math.max(...opts.flatMap(o=>o.months.map(m=>m.service+m.infra+m.workforce)))||1;
+  const top=peak*1.12;
+  const x=m=>L+m/(MONTHS-1)*pw, y=v=>T+ph-v/top*ph;
+  const t16=Math.min(solveT(.16,p,q),QUARTERS)*3, t84=Math.min(solveT(.84,p,q),QUARTERS)*3;
+  const divs=[t16,t84].map(mm=>`<line x1="${x(mm)}" y1="${T}" x2="${x(mm)}" y2="${T+ph}" stroke="var(--line)" stroke-dasharray="3 3"/>`).join("");
+  const steps=4, gy=Array.from({length:steps+1},(_,i)=>{const v=top*i/steps;
+    return `<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line-soft)"/>
+      <text x="${L-9}" y="${y(v)+3.5}" text-anchor="end" font-size="10.5" font-family="var(--font-num)" fill="var(--ink-3)">${v>=1000?Math.round(v/1000)+"k":Math.round(v)}</text>`;}).join("");
+  const gx=[0,6,12,18,24,30,35].map(m=>`<text x="${x(m)}" y="${H-12}" text-anchor="middle" font-size="10.5" fill="var(--ink-3)">${m===35?36:m}</text>`).join("");
+  const lines=opts.map(o=>{
+    let d=""; o.months.forEach((mo,k)=>{d+=(k?"L":"M")+x(k).toFixed(1)+" "+y(mo.service+mo.infra+mo.workforce).toFixed(1);});
+    return `<path d="${d}" fill="none" stroke="${KCOL[o.kind]}" stroke-width="2.6" stroke-linejoin="round"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly running cost of each infrastructure model over three years">
+    ${gy}${divs}${gx}${lines}
+    <text x="${L}" y="${T-9}" font-size="10.5" fill="var(--ink-3)">CHF per month (excludes the one-time setup)</text>
+    <text x="${W-R}" y="${H-12}" text-anchor="end" font-size="10.5" fill="var(--ink-3)">month</text></svg>`;
+}
+
+function stackedBars(opts){
+  const max=Math.max(...opts.map(o=>o.total))||1;
+  const cheapest=Math.min(...opts.map(o=>o.total));
+  return opts.map(o=>{
+    const segs=CAT.map(([k,label,col])=>{const w=o[k]/o.total*100; if(w<=0.01)return"";
+      return `<div class="seg" style="width:${w.toFixed(2)}%;background:${col}" title="${label}: ${chf(o[k])}"></div>`;}).join("");
+    const delta=o.total-cheapest;
+    const people=(o.workforce+o.setup)/o.total*100;
+    return `<div class="srow">
+      <div class="top"><span class="nm" style="color:${KCOL[o.kind]}">${esc(o.name)}</span>
+        <span class="tt">${chf(o.total)}${delta>0?` <span style="color:var(--ink-3);font-weight:400">+${chfK(delta)}</span>`:""}</span></div>
+      <div class="track"><div class="fill" style="width:${(o.total/max*100).toFixed(2)}%">${segs}</div></div>
+      <div class="sub">${Math.round(people)}% of it is people</div></div>`;
+  }).join("");
+}
+const legend=items=>`<div class="legend">${items.map(([n,c])=>`<span><span class="sw" style="background:${c}"></span>${n}</span>`).join("")}</div>`;
+
+
+function pathStrip(cp){
+  const total=cp.phases.reduce((s,p)=>s+p.months,0)||1;
+  const segs=cp.phases.map(p=>`<div class="seg" style="width:${(p.months/total*100).toFixed(2)}%;
+    background:${KCOL[p.kind]}" title="${esc(INFRA[p.kind])}: ${chf(p.run)} over ${p.months} months"></div>`).join("");
+  const labs=cp.phases.map(p=>`<div style="width:${(p.months/total*100).toFixed(2)}%;padding-right:8px">
+    <div style="font-size:.7rem;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em">${esc(p.name)} · ${p.months} mo</div>
+    <div style="font-size:.86rem;font-weight:600;color:${KCOL[p.kind]}">${esc(INFRA[p.kind])}</div>
+    <div style="font-size:.78rem;color:var(--ink-3);font-family:var(--font-num)">${chf(p.run)}</div></div>`).join("");
+  return `<div class="track" style="height:30px">${`<div class="fill" style="width:100%">${segs}</div>`}</div>
+    <div style="display:flex;margin-top:8px">${labs}</div>`;
+}
+
+function scaleChart(rows,tier,cross){
+  const W=960,H=334,L=74,R=118,T=42,B=50,pw=W-L-R,ph=H-T-B;
+  const span=Math.max(20,Math.min(240,cross?Math.ceil(cross*1.35):SCALE_MAX));
+  const pts=[];for(let N=1;N<=span;N++)pts.push({N,...scaleAt(rows,tier,N)});
+  const top=Math.max(...pts.map(p=>Math.max(p.gw,p.pk,p.bz)))*1.06;
+  const x=N=>L+(N-1)/(span-1)*pw, y=v=>T+ph-v/top*ph;
+  const line=(k,col)=>{let d="";pts.forEach((p,i)=>{d+=(i?"L":"M")+x(p.N).toFixed(1)+" "+y(p[k]).toFixed(1);});
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linejoin="round"/>`;};
+  const gy=[0,.25,.5,.75,1].map(f=>{const v=top*f;
+    return `<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line-soft)"/>
+      <text x="${L-9}" y="${y(v)+3.5}" text-anchor="end" font-size="10.5" font-family="var(--font-num)"
+        fill="var(--ink-3)">${v>=1e6?(v/1e6).toFixed(1)+"M":Math.round(v/1e3)+"k"}</text>`;}).join("");
+  const step=Math.max(1,Math.round(span/6));
+  const gx=Array.from({length:7},(_,i)=>1+i*step).filter(N=>N<=span)
+    .map(N=>`<text x="${x(N)}" y="${H-24}" text-anchor="middle" font-size="10.5" fill="var(--ink-3)">${N}×</text>`).join("");
+  let mark="";
+  if(cross&&cross<=span){const p=pts[cross-1];
+    mark=`<line x1="${x(cross)}" y1="${T}" x2="${x(cross)}" y2="${T+ph}" stroke="var(--blue)" stroke-dasharray="4 3" opacity=".7"/>
+      <circle cx="${x(cross)}" cy="${y(p.bz)}" r="5.5" fill="var(--surface)" stroke="var(--blue)" stroke-width="2.6"/>
+      <text x="${x(cross)}" y="${T-10}" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--blue)">${cross}× — owned overtakes</text>`;}
+  const end=pts[pts.length-1];
+  const tag=(v,txt,col)=>`<text x="${W-R+8}" y="${y(v)+4}" font-size="10.5" font-weight="600" fill="${col}">${txt}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Three-year cost against the number of applications sharing the infrastructure">
+    ${gy}${gx}${mark}
+    ${line("pk","var(--s4)")}${line("bz","var(--blue)")}${line("gw","var(--s2)")}
+    ${tag(end.pk,"owned, peak","var(--s4)")}${tag(end.bz,"owned, busy","var(--blue)")}${tag(end.gw,"gateway","var(--s2)")}
+    <text x="${L}" y="${T-10}" font-size="10.5" fill="var(--ink-3)">three-year total cost of ownership, CHF</text>
+    <text x="${W-R}" y="${H-2}" text-anchor="end" font-size="10.5" fill="var(--ink-3)">applications of this size sharing the stack</text></svg>`;
+}
+
+// ───────────── Claude ─────────────
+let inp=null,sample=null,ctl=null;
+const $=id=>document.getElementById(id);
+const say=(t,err,busy)=>{const s=$("status");s.textContent=t;s.classList.toggle("err",!!err);s.classList.toggle("busy",!!busy);};
+const TIER_BRIEF=Object.entries(TIERS).map(([n,t])=>`Tier ${n}: ${t.name}, ${t.params}. Managed: ${t.managed.name}. Open-weight: ${t.open}.`).join("\n");
+
+const P1=d=>`You classify a GenAI product description for a cost model used by a Swiss insurer. Reply with ONLY one JSON object.
+
+Tiers available:
+${TIER_BRIEF}
+
+Product description:
+"""${d.slice(0,8000)}"""
+
+Return exactly:
+{"tier":1|2|3,
+ "tierRationale":"2-3 sentences: why this tier, what the tasks demand",
+ "candidates":[{"model":"name","why":"6-12 words"}],
+ "users":<integer intended user population>,
+ "tasksPerDay":<number tasks per user per working day>,
+ "tokensIn":<integer input tokens per task>,
+ "tokensOut":<integer output tokens per task>,
+ "sensitivity":"none"|"confidential"|"client-identifying",
+ "bassP":<0.01-0.08>,"bassQ":<0.2-0.6>,
+ "curveRationale":"2-3 sentences: how fast this reaches its users and why",
+ "assumptions":[{"field":"what was missing","value":"what you assumed","why":"why"}]}
+
+Rules: 2-3 candidates from the tiers above. bassP is the coefficient of innovation, bassQ the coefficient of imitation,
+per quarter; use 0.03 and 0.38 unless the description gives a clear reason to differ, and say so in curveRationale.
+List an assumption for EVERY number the description did not state, at most 6.`;
+
+const P2=c=>`You advise on GenAI infrastructure for a Swiss insurer. Reply with ONLY one JSON object.
+
+Application: ${c.tierName}, ${c.users} intended users, data sensitivity "${c.sensitivity}".
+Three-year total cost of ownership, already computed, CHF:
+${c.table}
+
+The four options: aiaas (Microsoft 365 Copilot seats plus Copilot Studio credits, no GPUs, lightest staffing),
+gateway (Microsoft Foundry, per token, a plain API call), hyper (Azure GPUs in Switzerland North running your own
+open-source stack, billed busy or idle), owned (the same stack on Dell APEX hardware colocated at Swisscom;
+Dell and Swisscom cover the data-centre layer, so no infrastructure engineer).
+
+Return exactly:
+{"recommendation":"3-4 sentences naming the option you would choose and why, referring to the figures above",
+ "notes":[{"kind":"aiaas|gateway|hyper|owned","note":"one sentence on what this option really costs or risks"}]}
+
+Rules: one note per option, all four. Client-identifying data rules out aiaas and gateway, whatever the cost.
+Never invent numbers that are not in the table.`;
+
+async function run(){
+  const d=$("desc").value.trim();
+  if(!d){say("Write or pick a product description first.",true);return;}
+  const preset=activePreset();
+  if(!preset&&!sample){
+    say("A description of your own needs a Claude session. This offline copy runs the three use cases from the report.",true);return;}
+  $("go").disabled=true;$("stop").hidden=false;$("out").innerHTML="";ctl=new AbortController();
+  try{
+    let a;
+    if(preset){
+      say("Reading the description…",false,true);
+      a=JSON.parse(JSON.stringify(PRESET_PROSE[preset]));
+    }else{
+      say("Reading the description…",false,true);
+      a=await sample.json(P1(d),{signal:ctl.signal,modelTier:"default"});
+    }
+    const fix=PRESET_FIX[preset];
+    if(fix){Object.assign(a,fix); a.pinned=fix.src;}
+    inp={users:Math.max(1,Math.round(+a.users||100)),tasksPerDay:Math.max(.1,+a.tasksPerDay||5),
+      tokensIn:Math.max(1,Math.round(+a.tokensIn||2000)),tokensOut:Math.max(1,Math.round(+a.tokensOut||500))};
+    inp.seats=fix?fix.seats:inp.users;
+    const tier=[1,2,3].includes(+a.tier)?+a.tier:2;
+    const p=Math.min(Math.max(+a.bassP||BASS_P,.01),.08),q=Math.min(Math.max(+a.bassQ||BASS_Q,.2),.6);
+    const rows=monthRows(inp,p,q);
+    renderHead(a,tier,rows,p,q);
+
+    const opts=KINDS.map(k=>runOption(k,rows,tier,inp));
+    renderOptions(opts,tier,p,q);
+
+    let rec;
+    if(preset){ rec=PRESET_PROSE[preset].decision; }
+    else{
+      say("Weighing the four options…",false,true);
+      const table=opts.map(o=>`- ${INFRA[o.kind]}: total ${Math.round(o.total)} `
+        +`(service ${Math.round(o.service)}, infrastructure ${Math.round(o.infra)}, `
+        +`workforce ${Math.round(o.workforce+o.setup)})`).join("\n");
+      rec=await sample.json(P2({tierName:TIERS[tier].name,users:inp.users,
+        sensitivity:a.sensitivity||"confidential",table}),{signal:ctl.signal,modelTier:"default"});
+    }
+    renderDecision(opts,rec,tier);
+    renderPath(opts,a.sensitivity||"confidential",preset);
+    renderScale(rows,tier,opts);
+    say("");
+  }catch(e){
+    const m={not_granted:"Claude access was declined for this page.",rate_limited:"Too many requests — wait a moment and try again.",
+      invalid_json:"Claude's answer could not be read. Press Estimate again.",cancelled:"Stopped.",
+      sampling_disabled:"Claude is not available on this account."}[e.code];
+    say(m||("Something went wrong"+(e.code?" ("+e.code+")":"")+". Try again."),e.code!=="cancelled");
+  }finally{$("go").disabled=false;$("stop").hidden=true;ctl=null;}
+}
+
+// ───────────── render ─────────────
+function renderHead(a,tier,rows,p,q){
+  const T=TIERS[tier],last=rows[rows.length-1];
+  const asm=(Array.isArray(a.assumptions)?a.assumptions:[]).slice(0,6)
+    .map(x=>`<li><span class="d"></span><span><strong>${esc(x.field)}:</strong> ${esc(x.value)} — <span style="color:var(--ink-3)">${esc(x.why)}</span></span></li>`).join("")
+    ||`<li><span class="d" style="background:var(--good)"></span><span>The description covered everything the model needed.</span></li>`;
+  const cands=(Array.isArray(a.candidates)?a.candidates:[]).slice(0,3)
+    .map(c=>`<li><strong>${esc(c.model)}</strong> — ${esc(c.why)}</li>`).join("");
+  const total3y=rows.reduce((s,r)=>s+r.monthly,0);
+
+  $("out").insertAdjacentHTML("beforeend",`
+  <div class="card fade" style="border-left:3px solid var(--s2)">
+    <div class="eyebrow">Assumptions</div><h2>What the description did not say</h2>
+    <p style="font-size:.88rem;margin-bottom:12px">Every figure below rests on these. Change the description to change them.</p>
+    ${a.pinned?`<p style="font-size:.84rem;margin:-4px 0 12px;padding:9px 12px;border-radius:8px;
+      background:var(--s1-soft);color:var(--s1)"><strong>Fixed for this preset.</strong> ${num(inp.users)} users ·
+      ${inp.tasksPerDay} tasks per working day · ${num(inp.tokensIn)} in / ${num(inp.tokensOut)} out tokens per task ·
+      ${esc(TIERS[tier].name)}. Taken from the report (${esc(a.pinned)}), not re-derived, so the figures below
+      reproduce it exactly. AI as a Service carries ${esc(a.seatNote||"")}. Write your own description and Claude
+      reads the parameters from it instead, with a Copilot seat charged for every user.</p>`:""}
+    <ul class="clean">${asm}</ul></div>
+
+  <div class="card fade">
+    <div class="eyebrow">Output 1 · LLM requirement</div>
+    <div class="bar" style="align-items:baseline;justify-content:space-between">
+      <h2>${esc(T.name)}</h2><span class="pill">${esc(T.params)}</span></div>
+    <p style="font-size:.9rem;max-width:75ch">${esc(a.tierRationale)}</p>
+    <div class="cols" style="margin-top:4px">
+      <div><h3>Candidate models</h3><ul>${cands}</ul></div>
+      <div><h3>If served on rented GPUs</h3>
+        <table><tr><th>GPU class</th><td style="text-align:right;font-size:.8rem">${esc(T.gpuVm)}</td></tr>
+        <tr><th>Throughput</th><td class="n">${num(T.vmTokS)} tok/s</td></tr>
+        <tr><th>Azure, always on</th><td class="n">${chf(T.azureMonth)}/mo</td></tr></table></div>
+      <div><h3>If bought as hardware</h3>
+        <table><tr><th>Server</th><td style="text-align:right;font-size:.8rem">${esc(T.hw.desc)}</td></tr>
+        <tr><th>Hardware</th><td class="n">USD ${num(T.hw.gpus*T.hw.card+T.hw.chassis)}</td></tr>
+        <tr><th>All-in per month</th><td class="n">${chf(ownedMonth(tier))}</td></tr></table></div>
+    </div></div>
+
+  <div class="card fade">
+    <div class="eyebrow">Output 2 · Adoption</div><h2>Three-year S-curve</h2>
+    <p style="font-size:.9rem;max-width:75ch">${esc(a.curveRationale)}</p>
+    ${curveChart(rows,p,q,inp.users)}
+    <div class="tiles">
+      <div class="tile"><span class="v">${num(inp.users)}</span><span class="k">Intended users</span></div>
+      <div class="tile"><span class="v">${num(last.adopters)}</span><span class="k">Users at month 36</span></div>
+      <div class="tile"><span class="v">${K(last.monthly)}</span><span class="k">Tokens / month, peak</span></div>
+      <div class="tile"><span class="v">${num(last.peak)}</span><span class="k">Peak tokens / second</span></div>
+      <div class="tile"><span class="v">${K(total3y)}</span><span class="k">Tokens over 3 years</span></div>
+    </div>
+    <p class="note">Bass diffusion with p=${p.toFixed(2)} and q=${q.toFixed(2)} per quarter ·
+    ${inp.tasksPerDay} tasks per user per working day · ${num(inp.tokensIn)} in / ${num(inp.tokensOut)} out tokens per task ·
+    peak factor ${PEAK} over ${WORK_SECONDS/3600} working hours.</p></div>`);
+}
+
+function renderOptions(opts,tier,p,q){
+  const cards=opts.map(o=>{
+    const roles=Object.keys(FTE[o.kind]).map(k=>ROLE[k]).join(" · ");
+    const rowsHtml=o.byPhase.map(b=>`<tr>
+      <td><strong>${esc(b.name)}</strong><br><span style="font-size:.76rem;color:var(--ink-3)">up to ${num(b.users)} users${b.vms?" · "+b.vms+" server"+(b.vms>1?"s":""):""}</span></td>
+      <td class="n">${b.months}</td><td class="n">${b.service?chf(b.service):"—"}</td><td class="n">${b.infra?chf(b.infra):"—"}</td>
+      <td class="n">${chf(b.workforce)}</td><td class="n">${b.setup?chf(b.setup):"—"}</td>
+      <td class="n"><strong>${chf(b.total)}</strong></td></tr>`).join("");
+    return `<div class="card rel fade" style="border-top:3px solid ${KCOL[o.kind]}">
+      <div class="bar" style="justify-content:space-between;align-items:baseline;margin-top:4px">
+        <div><div class="eyebrow" style="color:${KCOL[o.kind]}">${esc(o.name)}</div>
+          <h2>${chf(o.total)} over three years</h2></div>
+        <div style="text-align:right"><div style="font-size:.78rem;color:var(--ink-3)">who runs it</div>
+        <div style="font-size:.82rem">${esc(roles)}</div></div></div>
+      <div class="tscroll" style="margin-top:10px"><table><thead><tr><th>Phase</th><th class="n">Months</th>
+      <th class="n">Service</th><th class="n">Infrastructure</th><th class="n">Workforce</th><th class="n">Setup</th>
+      <th class="n">Phase total</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;}).join("");
+
+  $("out").insertAdjacentHTML("beforeend",`
+    <div class="card fade"><div class="eyebrow">Output 3 · Running cost</div>
+      <h2>Monthly cost on each infrastructure</h2>
+      <p style="font-size:.9rem;max-width:75ch">The same application, priced four ways over three years.
+      The dashed lines are the adoption phase boundaries.</p>
+      ${runRateChart(opts,p,q)}
+      ${legend(opts.map(o=>[o.name,KCOL[o.kind]]))}</div>
+    ${cards}`);
+}
+
+function renderDecision(opts,rec,tier){
+  const best=opts.reduce((a,b)=>b.total<a.total?b:a);
+  const notes=Array.isArray(rec?.notes)?rec.notes:[];
+  const noteOf=k=>notes.find(n=>n.kind===k)?.note||"";
+  const cmp=opts.map(o=>`<tr><td style="color:${KCOL[o.kind]};font-weight:600">${esc(o.name)}</td>
+    <td class="n">${chf(o.service)}</td><td class="n">${chf(o.infra)}</td><td class="n">${chf(o.workforce)}</td>
+    <td class="n">${chf(o.setup)}</td><td class="n"><strong>${chf(o.total)}</strong></td>
+    <td style="font-size:.8rem;color:var(--ink-3)">${esc(noteOf(o.kind))}</td></tr>`).join("");
+  const wShare=Math.round((best.workforce+best.setup)/best.total*100);
+
+  $("out").insertAdjacentHTML("beforeend",`
+    <div class="card fade"><div class="eyebrow">Output 4 · Decision</div>
+      <h2>Three-year total cost of ownership</h2>
+      <div style="margin-top:16px">${stackedBars(opts)}</div>
+      ${legend(CAT.map(([,n,c])=>[n,c]))}
+      <div class="sep"></div>
+      <div class="tscroll"><table><thead><tr><th>Infrastructure model</th><th class="n">Service</th>
+      <th class="n">Infrastructure</th><th class="n">Workforce</th><th class="n">Setup</th><th class="n">Total</th>
+      <th>What it really costs</th></tr></thead><tbody>${cmp}</tbody></table></div>
+      <div class="sep"></div>
+      <h3>Recommendation</h3>
+      <p style="font-size:.92rem;max-width:80ch">${esc(rec?.recommendation||"")}</p>
+      <p style="font-size:.92rem;max-width:80ch"><strong>${esc(best.name)}</strong> is the cheapest over three years at
+      ${chf(best.total)}, of which ${wShare}% is people — ${chf(best.workforce+best.setup)} against
+      ${chf(best.service+best.infra)} of vendor bills.</p>
+      <p class="note">AI as a Service carries ${inp.seats?num(inp.seats)+" Microsoft 365 Copilot seats":"no new Microsoft 365 Copilot seats"} at ${chf(SEAT)} per month,
+      plus Copilot Credits at ${CREDITS_PER_ANSWER} per answer — the tenant-graph grounding rate. Owned AI prices the
+      hardware from the card up (${esc(TIERS[tier].hw.desc)}, USD ${num(TIERS[tier].hw.gpus*TIERS[tier].hw.card+TIERS[tier].hw.chassis)})
+      over a 36-month APEX term at a ${UPLIFT}× subscription uplift, plus power and ${chf(COLO)} of Swisscom colocation;
+      Dell and Swisscom cover the data-centre layer, so it carries no infrastructure engineer. Hyperscaled AI is priced at
+      Azure pay-as-you-go list, always on in Switzerland North (Annex G.2); reservations and negotiated discounts lower it.
+      Salaries carry a 15% employer loading. Figures are illustrative, not validated with practitioners.</p></div>`);
+}
+
+
+function renderPath(opts,sens,preset){
+  const cp=combinedPath(opts,sens,preset);
+  const mig=cp.steps.filter(x=>x.at>0);
+  const rows=cp.phases.map(p=>{
+    const others=p.cand.filter(c=>c.kind!==p.kind)
+      .sort((a,b)=>a.run-b.run).map(c=>`${esc(INFRA[c.kind])} ${chf(c.run)}`).join(" · ");
+    return `<tr><td><strong>${esc(p.name)}</strong><br><span style="font-size:.76rem;color:var(--ink-3)">${p.months} months · up to ${num(p.users)} users</span></td>
+      <td style="color:${KCOL[p.kind]};font-weight:600">${esc(INFRA[p.kind])}</td>
+      <td class="n">${chf(p.run)}</td>
+      <td style="font-size:.78rem;color:var(--ink-3)">${others}</td></tr>`;}).join("");
+  const migHtml=mig.length?mig.map(m=>`<li><span class="d"></span><span><strong>${esc(INFRA[m.from])} → ${esc(INFRA[m.to])}</strong>
+      at the start of ${esc(PHASE[m.at].toLowerCase())}: <strong>${chf(m.cost)}</strong> — the full build cost of the
+      target stack (Annex H). The prompts, the evaluation set and the grounding documents carry over; the serving
+      layer, the deployment pipeline and the monitoring do not.</span></li>`).join("")
+    :`<li><span class="d" style="background:var(--good)"></span><span>No switch pays for itself. The same model stays
+      cheapest in all three phases, so the path carries one build cost and no migration.</span></li>`;
+  const cmp=cp.paper&&cp.paperCost!==null&&cp.paper.path.join()!==cp.phases.map(p=>p.kind).join()
+    ? `<div class="sep"></div><h3>Where the report differs</h3>
+       <p style="font-size:.88rem;max-width:80ch">The report recommends
+       <strong>${cp.paper.path.map(k=>esc(INFRA[k])).join(" → ")}</strong>, which costs ${chf(cp.paperCost)} —
+       ${cp.paperCost>cp.total?`${chf(cp.paperCost-cp.total)} more than the cheapest path`:`less than the cheapest path by cost alone`}.
+       ${esc(cp.paper.why)}</p>
+       <p style="font-size:.88rem;max-width:80ch;color:var(--ink-3)">That difference is what the report is willing to pay
+       for something this calculation does not hold: the skills an organisation already has, or the freedom to walk away
+       from a use case that has not proved itself. Cost decides the tier only once those are equal.</p>`
+    : "";
+  $("out").insertAdjacentHTML("beforeend",`
+    <div class="card fade"><div class="eyebrow">Output 5 · Blended path</div>
+      <h2>One path through the three phases</h2>
+      <p style="font-size:.9rem;max-width:78ch">Instead of one infrastructure for three years, the cheapest option in
+      each adoption phase, with the cost of changing between them counted.</p>
+      <div style="margin-top:16px">${pathStrip(cp)}</div>
+      <div class="tiles">
+        <div class="tile"><span class="v">${chf(cp.total)}</span><span class="k">Blended path, three years</span></div>
+        <div class="tile"><span class="v">${chf(cp.single.total)}</span><span class="k">Best single option (${esc(cp.single.name)})</span></div>
+        <div class="tile"><span class="v" style="color:${cp.saving>0?"var(--good)":"var(--ink-3)"}">${cp.saving>0?"−"+chf(cp.saving):"none"}</span><span class="k">Saved by switching</span></div>
+        <div class="tile"><span class="v">${chf(cp.build)}</span><span class="k">Build and migration</span></div>
+      </div>
+      <div class="tscroll" style="margin-top:14px"><table><thead><tr><th>Phase</th><th>Cheapest</th>
+        <th class="n">Running cost</th><th>The others, for this phase</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="sep"></div>
+      <h3>What a migration costs</h3>
+      <ul class="clean">${migHtml}</ul>
+      ${cmp}
+      <p class="note">The path optimises cost alone. Data rules are applied first — client-identifying data removes
+      AI as a Service and the GenAI Gateway whatever they cost — but continuity, risk and the skills already in the
+      organisation are not priced here.</p></div>`);
+}
+
+function renderScale(rows,tier,opts){
+  const xb=crossAt(rows,tier,"bz",240), xp=crossAt(rows,tier,"pk",240);
+  const one=scaleAt(rows,tier,1), om=ownedMonth(tier);
+  const perMPeak=om/SERVEDM(tier), perMFlat=om/FLATM(tier);
+  const api=(5*TIERS[tier].managed.in+TIERS[tier].managed.out)/6;
+  const tiles=[
+    ["var(--s4)",xp?xp+"×":"never",
+     "Provisioned for peak — one request at a time",
+     `Each new application adds its own peak, so servers are added in step with the busiest second of the day. Sized
+      that way, a server delivers ${K(SERVEDM(tier)*1e6)} tokens a month — ${chf2(perMPeak)} per million against
+      ${chf2(api)} on the gateway, so volume alone never closes the gap.`],
+    ["var(--blue)",xb?xb+"×":"never",
+     "Kept busy around the clock — work batched",
+     `Spread across the idle hours, one server delivers ${K(FLATM(tier)*1e6)} tokens a month and the same
+      hardware costs ${chf2(perMFlat)} per million. Owned AI overtakes the gateway at ${xb?xb+" times":"no multiple of"}
+      today's volume.`]];
+  $("out").insertAdjacentHTML("beforeend",`
+    <div class="card fade"><div class="eyebrow">Output 6 · Economy of scale</div>
+      <h2>How many applications before owning the hardware pays</h2>
+      <p style="font-size:.9rem;max-width:78ch">The same application, repeated. The gateway bill grows with every
+      token; owned hardware is bought in whole servers, so what matters is not how much traffic there is but how
+      evenly it is spread.</p>
+      <div class="cols" style="margin-top:14px">${tiles.map(([c,v,t,d])=>`
+        <div class="card" style="border-left:3px solid ${c};box-shadow:none;padding:16px">
+          <div class="big" style="color:${c}">${v}</div>
+          <h3 style="margin:6px 0 6px">${t}</h3>
+          <p style="font-size:.84rem;margin:0">${d}</p></div>`).join("")}</div>
+      <div style="margin-top:18px">${scaleChart(rows,tier,xb)}</div>
+      ${legend([["GenAI Gateway, per token","var(--s2)"],["Owned, provisioned for peak","var(--s4)"],
+                ["Owned, kept busy","var(--blue)"]])}
+      <div class="sep"></div>
+      <h3>How the hardware is kept busy</h3>
+      <p style="font-size:.88rem;max-width:80ch">Interactive traffic uses a working day: about eight hours, with a
+      peak three times the average. That leaves roughly four fifths of the month idle. Batch engineering is the
+      practice of filling it with work that nobody is waiting for:</p>
+      <ul style="margin-top:8px">
+        <li><strong>Evaluation runs at night.</strong> Regression suites over the whole prompt and grounding set,
+          scheduled after hours instead of competing with users.</li>
+        <li><strong>Offline inference for predictable questions.</strong> Answers to the common queries generated in
+          advance and served from cache, so the daytime GPU never sees them.</li>
+        <li><strong>Embedding and index refresh.</strong> Re-embedding changed documents and rebuilding the vector
+          index overnight, which is pure throughput work with no latency target.</li>
+        <li><strong>Bulk document processing.</strong> Classification, extraction and summarisation of everything that
+          arrived during the day, queued and run as one job.</li>
+        <li><strong>Queued, non-interactive requests.</strong> Anything with a service level in hours rather than
+          seconds, held in a queue and released into the gaps.</li>
+        <li><strong>Continuous batching at the server.</strong> vLLM or SGLang merging concurrent requests into one
+          GPU pass, which raises utilisation inside the working day as well.</li>
+      </ul>
+      <p class="note">Workforce is held flat as applications are added: the premise of a shared platform is that one
+      team runs it for all of them. If every application needed its own team, no amount of volume would pay the
+      hardware back. Gateway prices are per token at the tier's managed rate; owned servers are whole units, so the
+      lines step rather than curve.</p></div>`);
+}
+
+// ───────────── boot ─────────────
+// A preset is "active" only while the box still holds its text verbatim; edit a word and the
+// description is yours, so Claude reads the parameters from it.
+const activePreset=()=>{const v=$("desc").value.trim();
+  return Object.keys(PRESET_FIX).find(k=>PRESETS[k].trim()===v)||null;};
+$("preset").onchange=e=>{$("desc").value=PRESETS[e.target.value]||"";if(e.target.value==="new")$("desc").focus();};
+$("desc").value=PRESETS.medium;
+$("go").onclick=run;
+$("stop").onclick=()=>ctl?.abort();
+say("");
+(async()=>{
+  try{sample=await claude.use("sample");}catch{sample=null;}
+  if(!sample)say("Offline copy — the three use cases from the report run here; a description of your own needs a Claude session.");
+})();
+</script>
